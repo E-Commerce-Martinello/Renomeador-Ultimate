@@ -73,6 +73,13 @@
     .check-row input { accent-color: var(--primary); margin-top: 4px; }
     .options-panel { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
     .mode-panel[hidden] { display: none; }
+    .group-list { display: grid; gap: 9px; }
+    .group-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 10px; padding: 10px 11px; border: 1px solid var(--line); border-radius: 11px; background: #fcfcff; }
+    .group-id { font-size: 12px; font-weight: 800; color: #4f43b5; }
+    .group-input { padding: 9px 10px; font-size: 13px; }
+    .group-hint { margin-top: 12px; padding: 10px 11px; border-radius: 10px; background: #f7f6ff; color: var(--muted); font-size: 11px; }
+    .group-hint.error { background: #fff0f2; color: #8e2938; }
+    .status.error { color: var(--red); white-space: normal; }
     .button-row { display: flex; align-items: center; gap: 10px; margin-top: 22px; }
     .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; background: var(--primary); color: #fff; border: 0; border-radius: 11px; padding: 12px 16px; font-weight: 750; font-size: 13px; box-shadow: 0 7px 16px #5b4bdb2b; transition: background .15s, transform .15s; }
     .primary-button:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
@@ -151,6 +158,7 @@
             <div class="field">
               <label class="section-label" for="mode">Como deseja renomear?</label>
               <select class="select" id="mode">
+                <option value="groups">Renomear por grupo numerado (1 1, 1 2...)</option>
                 <option value="sequence">Criar sequência numerada</option>
                 <option value="replace">Substituir texto nos nomes atuais</option>
               </select>
@@ -171,6 +179,20 @@
                   <label class="section-label" for="startNumber">Começar em</label>
                   <input class="input" id="startNumber" type="number" min="0" step="1" value="1">
                 </div>
+              </div>
+            </div>
+
+            <div id="groupsPanel" class="mode-panel">
+              <div class="field">
+                <label class="section-label">Nome de cada grupo</label>
+                <p class="card-sub" style="margin:0 0 12px;">O site identifica o primeiro número do arquivo como grupo e o segundo como ordem da imagem. Digite o nome uma vez para cada grupo.</p>
+                <div id="groupList" class="group-list"></div>
+                <div id="groupHint" class="group-hint" role="status">Selecione imagens exportadas com nomes como 1 1, 1 2, 2 1...</div>
+              </div>
+              <div class="field">
+                <label class="section-label" for="groupSeparator">Separador do novo nome</label>
+                <select class="select" id="groupSeparator"><option value=" ">Espaço</option><option value="_">Sublinhado (_)</option><option value="-">Hífen (-)</option></select>
+                <div class="hint">Exemplo: grupo 1 = philips → 1 philips 1.jpg, 1 philips 2.jpg; grupo 2 = arno → 2 arno 1.jpg.</div>
               </div>
             </div>
 
@@ -239,6 +261,9 @@
       const dropzone = $('dropzone');
       const mode = $('mode');
       const sequencePanel = $('sequencePanel');
+      const groupsPanel = $('groupsPanel');
+      const groupList = $('groupList');
+      const groupHint = $('groupHint');
       const replacePanel = $('replacePanel');
       const clearFilesBtn = $('clearFiles');
       const downloadBtn = $('downloadBtn');
@@ -251,12 +276,27 @@
       const progress = $('progress');
       const progressBar = $('progressBar');
       let files = [];
+      const groupNames = Object.create(null);
+      let renderedGroupIds = null;
 
       const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
       const splitExtension = (filename) => {
         const dot = filename.lastIndexOf('.');
         if (dot <= 0) return { stem: filename, ext: '' };
         return { stem: filename.slice(0, dot), ext: filename.slice(dot) };
+      };
+      const parseExportName = (filename) => {
+        const { stem } = splitExtension(filename);
+        const match = stem.match(/^(\d+)[\s_-]+(\d+)$/u);
+        return match ? { group: match[1], image: match[2] } : null;
+      };
+      const detectedGroupIds = () => {
+        const ids = new Set();
+        files.forEach(file => {
+          const parsed = parseExportName(file.name);
+          if (parsed) ids.add(parsed.group);
+        });
+        return [...ids].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
       };
       const cleanName = (name) => name.replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/g, '').trim() || 'arquivo';
       const uniqueName = (desired, used) => {
@@ -284,6 +324,7 @@
         const start = Number.isFinite(rawStart) ? Math.max(0, rawStart) : 1;
         const base = cleanName($('baseName').value || 'arquivo');
         const separator = $('separator').value;
+        const groupSeparator = $('groupSeparator').value;
         const find = $('findText').value;
         const replacement = $('replaceText').value;
         const insensitive = $('caseInsensitive').checked;
@@ -294,7 +335,19 @@
           const original = file.name;
           const { stem, ext } = splitExtension(original);
           let desired;
-          if (currentMode === 'sequence') {
+          let error = '';
+          if (currentMode === 'groups') {
+            const parsed = parseExportName(original);
+            if (!parsed) {
+              desired = original;
+              error = 'Nome fora do padrão';
+            } else {
+              const groupName = (groupNames[parsed.group] || '').trim();
+              if (!groupName) error = `Preencha o nome do grupo ${parsed.group}`;
+              const label = groupName || '[preencher nome]';
+              desired = `${parsed.group}${groupSeparator}${label}${groupSeparator}${parsed.image}${ext}`;
+            }
+          } else if (currentMode === 'sequence') {
             desired = `${base}${separator}${start + index}${ext}`;
           } else {
             let changedStem = stem;
@@ -310,9 +363,52 @@
           }
           const safeDesired = cleanName(desired);
           const finalName = uniqueName(safeDesired, used);
-          results.push({ file, original, finalName, changed: original !== finalName });
+          results.push({ file, original, finalName, changed: original !== finalName, error });
         });
         return results;
+      };
+
+      function renderGroupControls() {
+        const ids = detectedGroupIds();
+        const idsKey = ids.join('|');
+        if (idsKey !== renderedGroupIds) {
+          groupList.innerHTML = '';
+          ids.forEach(id => {
+            const row = document.createElement('div');
+            row.className = 'group-row';
+            const label = document.createElement('label');
+            label.className = 'group-id';
+            label.htmlFor = `group-name-${id}`;
+            label.textContent = `Grupo ${id}`;
+            const input = document.createElement('input');
+            input.className = 'input group-input';
+            input.id = `group-name-${id}`;
+            input.type = 'text';
+            input.autocomplete = 'off';
+            input.placeholder = `Ex.: ${id === '1' ? 'philips' : id === '2' ? 'arno' : 'nome da marca/produto'}`;
+            input.dataset.groupId = id;
+            input.value = groupNames[id] || '';
+            input.setAttribute('aria-label', `Nome para o grupo ${id}`);
+            row.append(label, input);
+            groupList.appendChild(row);
+          });
+          renderedGroupIds = idsKey;
+        }
+
+        const invalidFiles = files.filter(file => !parseExportName(file.name));
+        const missing = ids.filter(id => !(groupNames[id] || '').trim());
+        groupHint.classList.remove('error');
+        if (!files.length) {
+          groupHint.textContent = 'Selecione imagens exportadas com nomes como 1 1, 1 2, 2 1...';
+        } else if (invalidFiles.length) {
+          groupHint.textContent = `${invalidFiles.length} arquivo(s) não seguem o padrão de dois números, por exemplo “1 1.jpg”. Troque para o modo de sequência ou confira os nomes antes de continuar.`;
+          groupHint.classList.add('error');
+        } else if (missing.length) {
+          groupHint.textContent = `Preencha o nome de ${missing.length === 1 ? 'um grupo' : 'todos os grupos'}: ${missing.join(', ')}. Ex.: grupo 1 = philips.`;
+          groupHint.classList.add('error');
+        } else {
+          groupHint.textContent = 'Tudo certo! Exemplo de saída: 1 philips 1.jpg, 1 philips 2.jpg, 2 arno 1.jpg.';
+        }
       };
 
       function showToast(message) {
@@ -323,12 +419,15 @@
       function render() {
         hideToast();
         sequencePanel.hidden = mode.value !== 'sequence';
+        groupsPanel.hidden = mode.value !== 'groups';
         replacePanel.hidden = mode.value !== 'replace';
+        renderGroupControls();
         fileCount.innerHTML = `<strong>${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}</strong> selecionado${files.length === 1 ? '' : 's'}`;
         clearFilesBtn.disabled = files.length === 0;
         const results = buildNames();
         previewCount.textContent = `${results.length} ${results.length === 1 ? 'item' : 'itens'}`;
-        downloadBtn.disabled = results.length === 0;
+        const hasGroupErrors = mode.value === 'groups' && results.some(item => item.error);
+        downloadBtn.disabled = results.length === 0 || hasGroupErrors;
         previewBody.innerHTML = '';
         if (!results.length) {
           emptyPreview.hidden = false;
@@ -346,7 +445,9 @@
           tdArrow.className = 'arrow';
           tdArrow.textContent = '→';
           const tdNew = document.createElement('td');
-          tdNew.innerHTML = `<span class="filename new-name" title="${escapeHtml(item.finalName)}">${escapeHtml(item.finalName)}</span><span class="status ${item.changed ? '' : 'same'}">${item.changed ? 'Renomeado' : 'Sem alteração'}</span>`;
+          const statusClass = item.error ? 'error' : (item.changed ? '' : 'same');
+          const statusText = item.error || (item.changed ? 'Renomeado' : 'Sem alteração');
+          tdNew.innerHTML = `<span class="filename new-name" title="${escapeHtml(item.finalName)}">${escapeHtml(item.finalName)}</span><span class="status ${statusClass}">${escapeHtml(statusText)}</span>`;
           tr.append(tdOld, tdArrow, tdNew);
           fragment.appendChild(tr);
         });
@@ -371,6 +472,12 @@
       }));
       dropzone.addEventListener('drop', event => addFiles(event.dataTransfer.files));
       clearFilesBtn.addEventListener('click', () => { files = []; render(); });
+      groupList.addEventListener('input', event => {
+        const input = event.target.closest('[data-group-id]');
+        if (!input) return;
+        groupNames[input.dataset.groupId] = input.value;
+        render();
+      });
       mode.addEventListener('change', render);
       document.querySelectorAll('input, select').forEach(el => {
         if (el !== fileInput) el.addEventListener('input', render);
