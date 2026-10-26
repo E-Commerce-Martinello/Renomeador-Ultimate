@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#5b4bdb">
+  <meta name="description" content="Renomeie vários arquivos de uma vez, com numeração automática e substituição de texto. Tudo acontece no seu navegador.">
+  <title>Renomeador em Lote</title>
+  <style>
+    :root {
+      --bg: #f5f6fb;
+      --surface: #ffffff;
+      --text: #20223a;
+      --muted: #70738b;
+      --line: #e5e7f1;
+      --primary: #5b4bdb;
+      --primary-dark: #4938c5;
+      --primary-soft: #f0eeff;
+      --green: #14845c;
+      --red: #ba3549;
+      --shadow: 0 14px 40px rgba(31, 35, 75, .07);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 10% 0%, #eeecff 0, transparent 30rem), var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    .shell { width: min(1080px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 52px; }
+    header { display: flex; align-items: center; gap: 14px; margin-bottom: 30px; }
+    .logo { width: 48px; height: 48px; display: grid; place-items: center; color: white; background: linear-gradient(145deg, #7567f2, #4d3ac8); border-radius: 15px; box-shadow: 0 8px 20px #5b4bdb35; }
+    .logo svg { width: 25px; height: 25px; }
+    .brand { font-size: 14px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--primary); }
+    h1 { font-size: clamp(29px, 4vw, 42px); line-height: 1.12; letter-spacing: -.04em; margin: 0 0 10px; }
+    .intro { color: var(--muted); margin: 0; max-width: 700px; font-size: 16px; }
+    .hero { margin-bottom: 26px; }
+    .examples { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .example { display: inline-flex; align-items: center; gap: 7px; border: 1px solid #e4e0ff; border-radius: 999px; padding: 7px 11px; background: #ffffffb5; font-size: 12px; color: #4f43b5; }
+    .example strong { font-weight: 700; }
+    .layout { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); gap: 20px; align-items: start; }
+    .card { background: var(--surface); border: 1px solid #ececf5; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+    .card-head { padding: 22px 24px 17px; border-bottom: 1px solid var(--line); }
+    .step { font-size: 11px; color: var(--primary); background: var(--primary-soft); border-radius: 6px; padding: 4px 7px; font-weight: 800; letter-spacing: .04em; margin-right: 8px; }
+    h2 { display: inline; margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    .card-sub { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
+    .card-body { padding: 22px 24px 24px; }
+    .dropzone { display: block; border: 1.5px dashed #c8c3f7; background: #faf9ff; border-radius: 14px; padding: 24px 16px; text-align: center; transition: .18s ease; cursor: pointer; }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--primary); background: #f2f0ff; }
+    .upload-icon { width: 44px; height: 44px; margin: 0 auto 10px; display: grid; place-items: center; color: var(--primary); background: var(--primary-soft); border-radius: 13px; }
+    .upload-icon svg { width: 23px; height: 23px; }
+    .drop-title { display: block; font-weight: 750; font-size: 14px; }
+    .drop-help { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .choose-button { display: inline-block; margin-top: 14px; background: var(--primary); color: #fff; padding: 9px 14px; border-radius: 9px; font-weight: 700; font-size: 12px; }
+    #fileInput { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .file-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; min-height: 34px; }
+    .file-count { color: var(--muted); font-size: 13px; }
+    .file-count strong { color: var(--text); }
+    .text-button { border: 0; background: transparent; color: var(--muted); padding: 6px 0; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+    .text-button:disabled { opacity: .35; cursor: not-allowed; }
+    .section-label { display: block; font-weight: 750; font-size: 12px; margin-bottom: 8px; }
+    .field { margin-bottom: 18px; }
+    .field:last-child { margin-bottom: 0; }
+    .input, .select { width: 100%; min-width: 0; border: 1px solid #dfe1ec; background: #fff; color: var(--text); border-radius: 10px; padding: 11px 12px; outline: none; transition: border-color .15s, box-shadow .15s; }
+    .input:focus, .select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px #5b4bdb1c; }
+    .hint { color: var(--muted); font-size: 11px; margin-top: 6px; }
+    .two-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, .52fr); gap: 12px; }
+    .check-row { display: flex; gap: 9px; align-items: flex-start; color: #555872; font-size: 12px; }
+    .check-row input { accent-color: var(--primary); margin-top: 4px; }
+    .options-panel { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
+    .mode-panel[hidden] { display: none; }
+    .button-row { display: flex; align-items: center; gap: 10px; margin-top: 22px; }
+    .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; background: var(--primary); color: #fff; border: 0; border-radius: 11px; padding: 12px 16px; font-weight: 750; font-size: 13px; box-shadow: 0 7px 16px #5b4bdb2b; transition: background .15s, transform .15s; }
+    .primary-button:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+    .primary-button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+    .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #fff; color: var(--text); border: 1px solid var(--line); border-radius: 11px; padding: 11px 14px; font-weight: 700; font-size: 13px; }
+    .preview-card { margin-top: 20px; }
+    .preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .preview-count { font-size: 11px; color: var(--muted); background: #f3f4f9; border-radius: 999px; padding: 5px 9px; white-space: nowrap; }
+    .preview-empty { text-align: center; padding: 34px 14px; color: var(--muted); font-size: 13px; }
+    .preview-empty svg { display: block; width: 30px; height: 30px; margin: 0 auto 10px; opacity: .5; }
+    .table-wrap { overflow-x: auto; max-height: 405px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { position: sticky; top: 0; background: #fafaff; text-align: left; color: var(--muted); font-weight: 750; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 11px 16px; border-bottom: 1px solid var(--line); }
+    td { padding: 11px 16px; border-bottom: 1px solid #f0f1f6; vertical-align: top; }
+    tr:last-child td { border-bottom: 0; }
+    .filename { display: block; max-width: 230px; word-break: break-word; }
+    .old-name { color: #777a90; }
+    .new-name { font-weight: 700; color: #343050; }
+    .arrow { color: #b1b3c5; }
+    .status { font-size: 11px; color: var(--green); white-space: nowrap; }
+    .status.same { color: var(--muted); }
+    .status.duplicate { color: var(--red); }
+    .bottom-note { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 11px; margin: 20px 2px 0; }
+    .bottom-note svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--green); }
+    .toast { display: none; margin-top: 14px; padding: 11px 12px; border-radius: 10px; color: #8e2938; background: #fff0f2; font-size: 12px; }
+    .toast.show { display: block; }
+    .progress { height: 4px; overflow: hidden; border-radius: 99px; background: #ebe9ff; margin-top: 12px; display: none; }
+    .progress.show { display: block; }
+    .progress-bar { height: 100%; width: 0; background: var(--primary); transition: width .15s; }
+    footer { margin-top: 25px; text-align: center; font-size: 11px; color: #9294a8; }
+    @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } .shell { padding-top: 24px; } .card-head { padding-left: 19px; padding-right: 19px; } .card-body { padding: 19px; } }
+    @media (max-width: 420px) { .shell { width: min(100% - 22px, 1080px); } .two-cols { grid-template-columns: 1fr; gap: 0; } .button-row { flex-direction: column; align-items: stretch; } .button-row button { width: 100%; } .examples { gap: 6px; } .example { font-size: 11px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H20"/><path d="M4 7.5v10A2.5 2.5 0 0 0 6.5 20H20V5"/><path d="m9 12 2.2 2.2L16 9.5"/></svg>
+      </div>
+      <div>
+        <div class="brand">Ferramenta online</div>
+        <div style="font-weight:800; font-size:16px;">Renomeador em Lote</div>
+      </div>
+    </header>
+
+    <section class="hero">
+      <h1>Renomeie vários arquivos<br>de uma só vez.</h1>
+      <p class="intro">Organize nomes, substitua palavras ou caracteres e crie uma sequência numerada. Confira tudo antes de baixar.</p>
+      <div class="examples" aria-label="Exemplos de nomes">
+        <span class="example"><strong>1 philips 1</strong> · <strong>1 philips 2</strong> · <strong>1 philips 3</strong></span>
+        <span class="example">Troque <strong>_</strong> por <strong>espaço</strong></span>
+        <span class="example">Preserva as extensões (.jpg, .pdf...)</span>
+      </div>
+    </section>
+
+    <div class="layout">
+      <section class="card">
+        <div class="card-head">
+          <span class="step">ETAPA 1</span><h2>Adicione os arquivos</h2>
+          <p class="card-sub">Selecione quantos arquivos quiser ou arraste-os para esta área.</p>
+        </div>
+        <div class="card-body">
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <span class="upload-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg></span>
+            <span class="drop-title">Clique para escolher os arquivos</span>
+            <span class="drop-help">ou arraste e solte aqui · todos os formatos</span>
+            <span class="choose-button">Selecionar arquivos</span>
+          </label>
+          <input id="fileInput" type="file" multiple>
+          <div class="file-summary">
+            <span class="file-count" id="fileCount"><strong>0 arquivos</strong> selecionados</span>
+            <button id="clearFiles" class="text-button" type="button" disabled>Remover todos</button>
+          </div>
+          <div class="options-panel">
+            <div class="field">
+              <label class="section-label" for="mode">Como deseja renomear?</label>
+              <select class="select" id="mode">
+                <option value="sequence">Criar sequência numerada</option>
+                <option value="replace">Substituir texto nos nomes atuais</option>
+              </select>
+            </div>
+
+            <div id="sequencePanel" class="mode-panel">
+              <div class="field">
+                <label class="section-label" for="baseName">Nome base</label>
+                <input class="input" id="baseName" type="text" value="1 philips" placeholder="Ex.: 1 philips" autocomplete="off">
+                <div class="hint">Com esse exemplo, os arquivos ficarão: 1 philips 1, 1 philips 2, 1 philips 3...</div>
+              </div>
+              <div class="two-cols">
+                <div class="field">
+                  <label class="section-label" for="separator">Separador</label>
+                  <select class="select" id="separator"><option value=" ">Espaço</option><option value="_">Sublinhado (_)</option><option value="-">Hífen (-)</option><option value="">Nenhum</option></select>
+                </div>
+                <div class="field">
+                  <label class="section-label" for="startNumber">Começar em</label>
+                  <input class="input" id="startNumber" type="number" min="0" step="1" value="1">
+                </div>
+              </div>
+            </div>
+
+            <div id="replacePanel" class="mode-panel" hidden>
+              <div class="field">
+                <label class="section-label" for="findText">Texto ou caractere que deseja localizar</label>
+                <input class="input" id="findText" type="text" placeholder="Ex.: _ ou Philips antigo" autocomplete="off">
+              </div>
+              <div class="field">
+                <label class="section-label" for="replaceText">Substituir por</label>
+                <input class="input" id="replaceText" type="text" placeholder="Ex.: espaço ou Philips novo" autocomplete="off">
+                <div class="hint">Deixe vazio para remover o texto encontrado. A alteração é aplicada ao nome, não à extensão.</div>
+              </div>
+              <div class="field">
+                <label class="check-row"><input id="caseInsensitive" type="checkbox" checked><span>Ignorar maiúsculas e minúsculas ao localizar o texto.</span></label>
+              </div>
+              <div class="two-cols">
+                <div class="field"><label class="section-label" for="prefix">Adicionar prefixo (opcional)</label><input class="input" id="prefix" type="text" placeholder="Ex.: Oferta_" autocomplete="off"></div>
+                <div class="field"><label class="section-label" for="suffix">Adicionar sufixo (opcional)</label><input class="input" id="suffix" type="text" placeholder="Ex.: _2026" autocomplete="off"></div>
+              </div>
+            </div>
+
+            <label class="check-row"><input id="sortFiles" type="checkbox" checked><span>Ordenar os arquivos pelo nome original antes de numerar.</span></label>
+          </div>
+          <div class="button-row">
+            <button id="downloadBtn" class="primary-button" type="button" disabled>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+              Baixar arquivos renomeados (.ZIP)
+            </button>
+          </div>
+          <div id="progress" class="progress" aria-hidden="true"><div id="progressBar" class="progress-bar"></div></div>
+          <div id="toast" class="toast" role="status" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head preview-head">
+          <div><span class="step">ETAPA 2</span><h2>Prévia dos nomes</h2><p class="card-sub">Confira os nomes novos antes de baixar.</p></div>
+          <span class="preview-count" id="previewCount">0 itens</span>
+        </div>
+        <div id="emptyPreview" class="preview-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>
+          Primeiro, selecione os arquivos para ver como ficarão os nomes.
+        </div>
+        <div id="tableWrap" class="table-wrap" hidden>
+          <table>
+            <thead><tr><th>Nome atual</th><th aria-label="Seta">→</th><th>Novo nome</th></tr></thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <p class="bottom-note">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/><path d="m9 12 2 2 4-4"/></svg>
+      <span><strong>Seus arquivos ficam no seu dispositivo.</strong> O site processa os nomes no navegador e cria um ZIP para baixar. Os arquivos originais não são alterados.</span>
+    </p>
+    <footer>Renomeador em Lote · Feito para facilitar tarefas repetitivas</footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const fileInput = $('fileInput');
+      const dropzone = $('dropzone');
+      const mode = $('mode');
+      const sequencePanel = $('sequencePanel');
+      const replacePanel = $('replacePanel');
+      const clearFilesBtn = $('clearFiles');
+      const downloadBtn = $('downloadBtn');
+      const previewBody = $('previewBody');
+      const tableWrap = $('tableWrap');
+      const emptyPreview = $('emptyPreview');
+      const fileCount = $('fileCount');
+      const previewCount = $('previewCount');
+      const toast = $('toast');
+      const progress = $('progress');
+      const progressBar = $('progressBar');
+      let files = [];
+
+      const escapeHtml = (value) => String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+      const splitExtension = (filename) => {
+        const dot = filename.lastIndexOf('.');
+        if (dot <= 0) return { stem: filename, ext: '' };
+        return { stem: filename.slice(0, dot), ext: filename.slice(dot) };
+      };
+      const cleanName = (name) => name.replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/g, '').trim() || 'arquivo';
+      const uniqueName = (desired, used) => {
+        const { stem, ext } = splitExtension(desired);
+        let candidate = desired;
+        let n = 2;
+        while (used.has(candidate.toLocaleLowerCase('pt-BR'))) {
+          candidate = `${stem} (${n})${ext}`;
+          n += 1;
+        }
+        used.add(candidate.toLocaleLowerCase('pt-BR'));
+        return candidate;
+      };
+      const sortedFiles = () => {
+        const list = [...files];
+        if ($('sortFiles').checked) list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true, sensitivity: 'base' }));
+        return list;
+      };
+      const buildNames = () => {
+        const list = sortedFiles();
+        const used = new Set();
+        const results = [];
+        const currentMode = mode.value;
+        const rawStart = Number.parseInt($('startNumber').value, 10);
+        const start = Number.isFinite(rawStart) ? Math.max(0, rawStart) : 1;
+        const base = cleanName($('baseName').value || 'arquivo');
+        const separator = $('separator').value;
+        const find = $('findText').value;
+        const replacement = $('replaceText').value;
+        const insensitive = $('caseInsensitive').checked;
+        const prefix = $('prefix').value;
+        const suffix = $('suffix').value;
+
+        list.forEach((file, index) => {
+          const original = file.name;
+          const { stem, ext } = splitExtension(original);
+          let desired;
+          if (currentMode === 'sequence') {
+            desired = `${base}${separator}${start + index}${ext}`;
+          } else {
+            let changedStem = stem;
+            if (find) {
+              if (insensitive) {
+                const escaped = find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                changedStem = changedStem.replace(new RegExp(escaped, 'gi'), () => replacement);
+              } else {
+                changedStem = changedStem.split(find).join(replacement);
+              }
+            }
+            desired = `${prefix}${changedStem}${suffix}${ext}`;
+          }
+          const safeDesired = cleanName(desired);
+          const finalName = uniqueName(safeDesired, used);
+          results.push({ file, original, finalName, changed: original !== finalName });
+        });
+        return results;
+      };
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+      }
+      function hideToast() { toast.classList.remove('show'); toast.textContent = ''; }
+      function render() {
+        hideToast();
+        sequencePanel.hidden = mode.value !== 'sequence';
+        replacePanel.hidden = mode.value !== 'replace';
+        fileCount.innerHTML = `<strong>${files.length} ${files.length === 1 ? 'arquivo' : 'arquivos'}</strong> selecionado${files.length === 1 ? '' : 's'}`;
+        clearFilesBtn.disabled = files.length === 0;
+        const results = buildNames();
+        previewCount.textContent = `${results.length} ${results.length === 1 ? 'item' : 'itens'}`;
+        downloadBtn.disabled = results.length === 0;
+        previewBody.innerHTML = '';
+        if (!results.length) {
+          emptyPreview.hidden = false;
+          tableWrap.hidden = true;
+          return;
+        }
+        emptyPreview.hidden = true;
+        tableWrap.hidden = false;
+        const fragment = document.createDocumentFragment();
+        results.forEach(item => {
+          const tr = document.createElement('tr');
+          const tdOld = document.createElement('td');
+          tdOld.innerHTML = `<span class="filename old-name" title="${escapeHtml(item.original)}">${escapeHtml(item.original)}</span>`;
+          const tdArrow = document.createElement('td');
+          tdArrow.className = 'arrow';
+          tdArrow.textContent = '→';
+          const tdNew = document.createElement('td');
+          tdNew.innerHTML = `<span class="filename new-name" title="${escapeHtml(item.finalName)}">${escapeHtml(item.finalName)}</span><span class="status ${item.changed ? '' : 'same'}">${item.changed ? 'Renomeado' : 'Sem alteração'}</span>`;
+          tr.append(tdOld, tdArrow, tdNew);
+          fragment.appendChild(tr);
+        });
+        previewBody.appendChild(fragment);
+      }
+      function addFiles(newFiles) {
+        const existing = new Set(files.map(file => `${file.name}::${file.size}::${file.lastModified}`));
+        for (const file of newFiles) {
+          const key = `${file.name}::${file.size}::${file.lastModified}`;
+          if (!existing.has(key)) { files.push(file); existing.add(key); }
+        }
+        fileInput.value = '';
+        render();
+      }
+
+      fileInput.addEventListener('change', (event) => addFiles(event.target.files));
+      ['dragenter', 'dragover'].forEach(type => dropzone.addEventListener(type, event => {
+        event.preventDefault(); event.stopPropagation(); dropzone.classList.add('dragover');
+      }));
+      ['dragleave', 'drop'].forEach(type => dropzone.addEventListener(type, event => {
+        event.preventDefault(); event.stopPropagation(); dropzone.classList.remove('dragover');
+      }));
+      dropzone.addEventListener('drop', event => addFiles(event.dataTransfer.files));
+      clearFilesBtn.addEventListener('click', () => { files = []; render(); });
+      mode.addEventListener('change', render);
+      document.querySelectorAll('input, select').forEach(el => {
+        if (el !== fileInput) el.addEventListener('input', render);
+        if (el.type === 'checkbox') el.addEventListener('change', render);
+      });
+
+      downloadBtn.addEventListener('click', async () => {
+        hideToast();
+        if (!files.length) return;
+        if (typeof JSZip === 'undefined') {
+          showToast('Não foi possível carregar a biblioteca de compactação. Verifique sua conexão com a internet e atualize a página.');
+          return;
+        }
+        const results = buildNames();
+        const zip = new JSZip();
+        results.forEach(item => zip.file(item.finalName, item.file));
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = 'Preparando ZIP...';
+        progress.classList.add('show');
+        progressBar.style.width = '0%';
+        try {
+          const blob = await zip.generateAsync({ type: 'blob' }, metadata => {
+            progressBar.style.width = `${Math.round(metadata.percent)}%`;
+          });
+          const url = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = 'arquivos-renomeados.zip';
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+          showToast(`Pronto! ${results.length} ${results.length === 1 ? 'arquivo foi preparado' : 'arquivos foram preparados'} com os novos nomes.`);
+        } catch (error) {
+          showToast('Ocorreu um erro ao gerar o ZIP. Tente novamente com menos arquivos ou arquivos menores.');
+        } finally {
+          downloadBtn.disabled = files.length === 0;
+          downloadBtn.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg> Baixar arquivos renomeados (.ZIP)';
+          setTimeout(() => { progress.classList.remove('show'); progressBar.style.width = '0%'; }, 900);
+        }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
